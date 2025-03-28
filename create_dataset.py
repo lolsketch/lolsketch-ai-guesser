@@ -15,6 +15,8 @@ idx = 0
 file_names = os.listdir('image_data')
 for f_name in tqdm(file_names):
     with open('image_data/' + f_name, 'r') as f:
+        if f_name[-4:] != 'json':
+            continue
         info = json.load(f)
         label = info['label']
         if label in label_to_champion:

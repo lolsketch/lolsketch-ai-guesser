@@ -1,3 +1,6 @@
 dataset
+.DS_Store
 image_data
 *.pth
+__pycache__
+*.zip

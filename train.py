@@ -4,11 +4,15 @@ from dataset import get_data_loaders
 from tqdm import tqdm
 import argparse
 
+import ssl
+ssl._create_default_https_context = ssl._create_unverified_context
+
 parser = argparse.ArgumentParser(description="League of legends Doodle Classifier")
 
 parser.add_argument('--model', choices=['mobilenet', 'resnet'], help="Specify the model type: 'mobilenet' or 'resnet'", required=True)
 
-device = 'cuda' if torch.cuda.is_available() else 'cpu'
+device = 'cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu'
+
 print(f'Using device {device}')
 
 train_dataloader, val_dataloader = get_data_loaders(16, 256)
@@ -18,9 +22,37 @@ num_classes = 170
 args = parser.parse_args()
 
 if args.model == 'mobilenet':
+    # Load MobileNet-V3-Small Model
     model = torchvision.models.mobilenet_v3_small(weights=torchvision.models.MobileNet_V3_Small_Weights.IMAGENET1K_V1)
-    model.classifier = torch.nn.Linear(512, num_classes)
+    model.classifier = torch.nn.Linear(576, num_classes)
+elif args.model == 'vgg':
+    # Load VGG-16 Model
+    model = torchvision.models.vgg16(weights='IMAGENET1K_V1')
+    model.classifier[6] = torch.nn.Linear(4096, num_classes)
+elif args.model == 'cnn':
+    model = torch.nn.Sequential(
+        torch.nn.Conv2d(3, 16, 3, 1, 1),
+        torch.nn.ReLU(True),
+        torch.nn.MaxPool2d(2, 2),
+
+        torch.nn.Conv2d(16, 32, 3, 1, 1),
+        torch.nn.ReLU(True),
+        torch.nn.MaxPool2d(2, 2),
+
+        torch.nn.Conv2d(32, 64, 3, 1, 1),
+        torch.nn.ReLU(True),
+        torch.nn.MaxPool2d(2, 2),
+
+        torch.nn.Conv2d(64, 128, 3, 1, 1),
+        torch.nn.ReLU(True),
+        torch.nn.MaxPool2d(2, 2),
+
+        torch.nn.Flatten(),
+        torch.nn.Linear(128*4*4, num_classes)
+    )
+    
 else:
+    # Load ResNet-50 Model
     model = torchvision.models.resnet50(weights=torchvision.models.ResNet50_Weights.IMAGENET1K_V2)
     model.fc = torch.nn.Linear(2048, num_classes)
 
