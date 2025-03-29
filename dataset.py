@@ -80,16 +80,16 @@ def denorm(images):
     return images * std + mean
 
 if __name__ == '__main__':
-    train_dl, test_dl = get_data_loaders(16, 16)
+    _, test_dl = get_data_loaders(16, 16)
 
-    classes = list(train_dl.dataset.class_names)
+    classes = list(test_dl.dataset.class_names)
 
     images, labels = next(iter(test_dl))
 
     images = denorm(images) # Denormalize the images to view their original colors
 
     # Plot the images along with their labels
-    fig, axes = plt.subplots(1, 4, figsize=(8, 5))  # 1 row, 4 columns
+    fig, axes = plt.subplots(1, 4, figsize=(8, 3))  # 1 row, 4 columns
     plt.suptitle('Testing Data')
 
     # Iterate through images and labels, and plot them
