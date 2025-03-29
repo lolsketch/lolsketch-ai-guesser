@@ -4,12 +4,9 @@ from dataset import get_data_loaders
 from tqdm import tqdm
 import argparse
 
-import ssl
-ssl._create_default_https_context = ssl._create_unverified_context
-
 parser = argparse.ArgumentParser(description="League of legends Doodle Classifier")
 
-parser.add_argument('--model', choices=['mobilenet', 'resnet'], help="Specify the model type: 'mobilenet' or 'resnet'", required=True)
+parser.add_argument('--model', choices=['mobilenet', 'resnet', 'vgg', 'cnn'], help="Specify the model type: 'mobilenet', 'resnet', 'vgg', or 'cnn'", required=True)
 
 device = 'cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu'
 
@@ -50,7 +47,6 @@ elif args.model == 'cnn':
         torch.nn.Flatten(),
         torch.nn.Linear(128*4*4, num_classes)
     )
-    
 else:
     # Load ResNet-50 Model
     model = torchvision.models.resnet50(weights=torchvision.models.ResNet50_Weights.IMAGENET1K_V2)
@@ -84,29 +80,22 @@ def test(dataloader, model, loss_fn):
     test_loss /= num_batches
     correct /= size
     print(f"Test Error: \n Accuracy: {(100*correct):>0.1f}%, Avg loss: {test_loss:>8f} \n")
-    return test_loss, correct
+    return test_loss
 
 if __name__ == '__main__':
     loss_fn = torch.nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
 
-    train_losses = []
-    test_accuracy = []
-    test_losses = []
     epochs = 50
     lowest_loss = 1000
     for t in range(epochs):
         print(f"Epoch {t+1}")
-        train_l = train(train_dataloader, model, loss_fn, optimizer)
-        test_l, test_a = test(val_dataloader, model, loss_fn)
-        if test_l < lowest_loss:
-            lowest_loss = test_l
+        train(train_dataloader, model, loss_fn, optimizer)
+        loss = test(val_dataloader, model, loss_fn)
+        if loss < lowest_loss:
+            lowest_loss = loss
             print('New lowest loss found: ', lowest_loss)
             model = model.to('cpu')
-            torch.save(model, 'model.pth')
+            torch.save(model.state_dict(), f'models/{args.model}.pth')
             model = model.to(device)
-
-        train_losses.append(train_l)
-        test_accuracy.append(test_a)
-        test_losses.append(test_l)
     print("Done!")
