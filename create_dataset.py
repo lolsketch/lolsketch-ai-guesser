@@ -1,4 +1,4 @@
-from draw_image import rasterize
+from rasterize import rasterize
 import os
 import json
 from tqdm import tqdm
