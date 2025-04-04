@@ -7,10 +7,11 @@ from tqdm import tqdm
 import argparse
 import matplotlib.pyplot as plt
 from sklearn.manifold import TSNE
+from models import get_model
 
 parser = argparse.ArgumentParser(description="Silhouette Score Calculator")
 
-parser.add_argument('--model', choices=['mobilenet', 'resnet', 'vgg', 'cnn'], help="Specify the model type: 'mobilenet' or 'resnet'", required=True)
+parser.add_argument('--model', choices=['mobilenet', 'resnet', 'vgg'], help="Specify the model type: 'mobilenet', 'resnet', or 'vgg'", required=True)
 
 args = parser.parse_args()
 
@@ -21,49 +22,14 @@ device = 'cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is
 
 num_classes = 170
 
+model = get_model(model_type=args.model, pretrained=True)
+
 if args.model == 'mobilenet':
-    # Load MobileNet-V3-Small Model
-    model = torchvision.models.mobilenet_v3_small()
-    model.classifier = torch.nn.Linear(576, num_classes)
-    model.load_state_dict(torch.load('models/mobilenet.pth', weights_only=True, map_location='cpu'))
     model = torch.nn.Sequential(*list(model.children())[:-1])
-
 elif args.model == 'vgg':
-    # Load VGG-16 Model
-    model = torchvision.models.vgg16()
-    model.classifier[6] = torch.nn.Linear(4096, num_classes)
-    model.load_state_dict(torch.load('models/vgg.pth', weights_only=True, map_location='cpu'))
     model = model.features
-elif args.model == 'cnn':
-    model = torch.nn.Sequential(
-        torch.nn.Conv2d(3, 16, 3, 1, 1),
-        torch.nn.ReLU(True),
-        torch.nn.MaxPool2d(2, 2),
-
-        torch.nn.Conv2d(16, 32, 3, 1, 1),
-        torch.nn.ReLU(True),
-        torch.nn.MaxPool2d(2, 2),
-
-        torch.nn.Conv2d(32, 64, 3, 1, 1),
-        torch.nn.ReLU(True),
-        torch.nn.MaxPool2d(2, 2),
-
-        torch.nn.Conv2d(64, 128, 3, 1, 1),
-        torch.nn.ReLU(True),
-        torch.nn.MaxPool2d(2, 2),
-
-        torch.nn.Flatten(),
-        torch.nn.Linear(128*4*4, num_classes)
-    )
-    model.load_state_dict(torch.load('models/cnn.pth', weights_only=True, map_location='cpu'))
-    model = model[:-2]
-
 else:
-    # Load ResNet-50 Model
-    model = torchvision.models.resnet50()
-    model.fc = torch.nn.Linear(2048, num_classes)
-    model.load_state_dict(torch.load('models/resnet.pth', weights_only=True, map_location='cpu'))
-    model = torch.nn.Sequential(*list(model.children())[:-2])
+    model = torch.nn.Sequential(*list(model.children())[:-1])
 
 
 model.eval()
@@ -110,7 +76,7 @@ for label in selected_labels:
     idx = filtered_labels == label
     plt.scatter(reduced_embeddings[idx, 0], reduced_embeddings[idx, 1], label=f'Class {label}', alpha=0.7)
 
-plt.title('t-SNE Visualization of Model Embeddings')
-plt.xlabel('t-SNE Component 1')
-plt.ylabel('t-SNE Component 2')
+plt.title('2D Projection of VGG16 Feature Embeddings')
+plt.xlabel('Dimension 1')
+plt.ylabel('Dimension 2')
 plt.show()
