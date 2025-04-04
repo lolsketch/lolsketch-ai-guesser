@@ -4,3 +4,4 @@ image_data
 *.pth
 __pycache__
 *.zip
+*.json

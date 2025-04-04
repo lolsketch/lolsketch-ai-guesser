@@ -1,8 +1,10 @@
 import torch
-import torchvision
 from dataset import get_data_loaders
 from tqdm import tqdm
 import argparse
+from models import get_model
+import json
+
 
 parser = argparse.ArgumentParser(description="League of legends Doodle Classifier")
 
@@ -18,44 +20,22 @@ num_classes = 170
 
 args = parser.parse_args()
 
-if args.model == 'mobilenet':
-    # Load MobileNet-V3-Small Model
-    model = torchvision.models.mobilenet_v3_small(weights=torchvision.models.MobileNet_V3_Small_Weights.IMAGENET1K_V1)
-    model.classifier = torch.nn.Linear(576, num_classes)
-elif args.model == 'vgg':
-    # Load VGG-16 Model
-    model = torchvision.models.vgg16(weights='IMAGENET1K_V1')
-    model.classifier[6] = torch.nn.Linear(4096, num_classes)
-elif args.model == 'cnn':
-    model = torch.nn.Sequential(
-        torch.nn.Conv2d(3, 16, 3, 1, 1),
-        torch.nn.ReLU(True),
-        torch.nn.MaxPool2d(2, 2),
-
-        torch.nn.Conv2d(16, 32, 3, 1, 1),
-        torch.nn.ReLU(True),
-        torch.nn.MaxPool2d(2, 2),
-
-        torch.nn.Conv2d(32, 64, 3, 1, 1),
-        torch.nn.ReLU(True),
-        torch.nn.MaxPool2d(2, 2),
-
-        torch.nn.Conv2d(64, 128, 3, 1, 1),
-        torch.nn.ReLU(True),
-        torch.nn.MaxPool2d(2, 2),
-
-        torch.nn.Flatten(),
-        torch.nn.Linear(128*4*4, num_classes)
-    )
+if args.model == 'cnn':
+    model = get_model(model_type=args.model, pretrained=False)
 else:
-    # Load ResNet-50 Model
-    model = torchvision.models.resnet50(weights=torchvision.models.ResNet50_Weights.IMAGENET1K_V2)
-    model.fc = torch.nn.Linear(2048, num_classes)
+    model = get_model(model_type=args.model, pretrained=True)
 
 model = model.to(device)
 
+# Define the train and test functions
 def train(dataloader, model, loss_fn, optimizer):
     model.train()
+
+    losses = []
+
+    avg_loss = 0
+
+    idx = 0
     for images, labels in tqdm(dataloader):
         images, labels = images.to(device), labels.to(device)
 
@@ -65,6 +45,17 @@ def train(dataloader, model, loss_fn, optimizer):
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
+        avg_loss += loss.item()
+
+        idx += 1
+        if idx == 10:
+            idx = 0
+            avg_loss /= 10
+            losses.append(avg_loss)
+            avg_loss = 0
+            
+    return losses
+        
 
 def test(dataloader, model, loss_fn):
     size = len(dataloader.dataset)
@@ -82,20 +73,31 @@ def test(dataloader, model, loss_fn):
     print(f"Test Error: \n Accuracy: {(100*correct):>0.1f}%, Avg loss: {test_loss:>8f} \n")
     return test_loss
 
-if __name__ == '__main__':
-    loss_fn = torch.nn.CrossEntropyLoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
+# Define Loss function and optimizer
+loss_fn = torch.nn.CrossEntropyLoss()
+optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
 
-    epochs = 50
-    lowest_loss = 1000
-    for t in range(epochs):
-        print(f"Epoch {t+1}")
-        train(train_dataloader, model, loss_fn, optimizer)
-        loss = test(val_dataloader, model, loss_fn)
-        if loss < lowest_loss:
-            lowest_loss = loss
-            print('New lowest loss found: ', lowest_loss)
-            model = model.to('cpu')
-            torch.save(model.state_dict(), f'models/{args.model}.pth')
-            model = model.to(device)
-    print("Done!")
+# Store train_losses and accuracy
+train_losses = []
+epochs = 35
+
+# Keep track of the lowest loss to checkpoint the model
+lowest_loss = 1000
+
+for t in range(epochs):
+    print(f"Epoch {t+1}")
+    train_loss = train(train_dataloader, model, loss_fn, optimizer) 
+    test_loss = test(val_dataloader, model, loss_fn)
+    
+    if test_loss < lowest_loss:
+        lowest_loss = test_loss
+        print('New lowest loss found: ', lowest_loss)
+
+        # torch.save(model.state_dict(), f'models/{args.model}.pth')
+
+    train_losses.extend(train_loss)
+
+with open('train_losses.json', 'w') as f:
+    json.dump(train_losses, f)
+
+print("Done!")

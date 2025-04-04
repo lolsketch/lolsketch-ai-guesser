@@ -1,49 +1,36 @@
 import torch
-import torchvision
-import matplotlib.pyplot as plt
+import argparse
+from dataset import get_data_loaders
+from sklearn.metrics import top_k_accuracy_score
+from models import get_model
 
-def acc_given_n_guesses(model, dataloader, n, device):
-    correct = 0
-    with torch.no_grad():
-        for image, label in dataloader:
-            image, label = image.to(device), label.to(device)
+parser = argparse.ArgumentParser(description="Top-N Accuracy Estimation")
 
-            preds = model(image)[0]
+parser.add_argument('--model', choices=['mobilenet', 'resnet', 'vgg', 'cnn'], help="Specify the model type: 'mobilenet', 'resnet', 'vgg', or 'cnn'", required=True)
 
-            _, prediction_indices = torch.sort(preds, descending=True)
+args = parser.parse_args()
 
-            for p_idx in prediction_indices[:n]:
-                if p_idx == label:
-                    correct += 1
-                    break
-            
-    return correct / len(dataloader)
+# Load the data
+_, dataloader = get_data_loaders(512, 256)
 
-if __name__ == '__main__':
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+model = get_model(model_type=args.model, pretrained=False)
+model.load_state_dict(torch.load(f'models/{args.model}.pth', weights_only=True, map_location='cpu'))
+model.eval()
 
-    model = torch.load('model.pth')
-    model = model.to(device)
-    model.eval()
+all_labels = []
+all_probs = []
 
-    transform = torchvision.transforms.Compose([
-        torchvision.transforms.ToTensor(),
-        torchvision.transforms.Normalize(mean=[0.9568, 0.9540, 0.9552], std=[0.1607, 0.1632, 0.1631])
-    ])
+with torch.no_grad():
+    for images, labels in dataloader:
+        preds = model(images)
 
-    dataset = torchvision.datasets.ImageFolder(root='dataset/test', transform=transform)
-    dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=False)
+        all_labels.extend(labels.cpu().numpy())
+        all_probs.extend(preds.cpu().numpy())
 
-    accuracies = []
-    for i in range(5):
-        accuracies.append(acc_given_n_guesses(model, dataloader, i+1, device))
-        print('done:', i)
-    
-    plt.figure(figsize=(8, 8))
-    plt.title('Accuracy Given N Guesses')
-    plt.plot(accuracies)
-    plt.xlabel('Number of Guesses')
-    plt.ylabel('Accuracy')
-    plt.show()
+top_1 = top_k_accuracy_score(all_labels, all_probs, k=1)
+top_5 = top_k_accuracy_score(all_labels, all_probs, k=5)
+top_10 = top_k_accuracy_score(all_labels, all_probs, k=10)
 
-    print(accuracies)
+print(f'Top-1: {round(top_1 * 100, 1)}')
+print(f'Top-5: {round(top_5 * 100, 1)}')
+print(f'Top-10: {round(top_10 * 100, 1)}')
