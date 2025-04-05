@@ -1,5 +1,4 @@
 import torch
-import torchvision
 import numpy as np
 import os
 from torchvision.io.image import read_image
@@ -82,6 +81,8 @@ def get_all_embeddings(data_dir, split):
 
     with torch.no_grad():
         for cn in class_names:
+            if cn == '.DS_Store': # Skip empty macos files
+                continue
             filenames = os.listdir(os.path.join(data_dir, split, cn))
             for fn in filenames:
                 path = os.path.join(data_dir, split, cn, fn)
